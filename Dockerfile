@@ -1,4 +1,4 @@
-FROM python:3.13-slim-bookworm
+FROM python:3.13-alpine
 
 LABEL maintainer="thomas.pretat@protonmail.com"
 LABEL description="LoL Esports Discord Bot"
@@ -7,12 +7,14 @@ LABEL version="2.0.0"
 #SETUP
 WORKDIR /app
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt && \
-    pip uninstall -y setuptools wheel pip
+RUN apk add --no-cache gcc musl-dev && \
+    pip install --no-cache-dir -r requirements.txt && \
+    pip uninstall -y setuptools wheel pip && \
+    apk del gcc musl-dev
 
 
 #SECURITY
-RUN useradd -m -u 1000 botuser && \
+RUN adduser -D -u 1000 botuser && \
     mkdir -p /app/data && \
     chown -R botuser:botuser /app
 
