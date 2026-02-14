@@ -7,10 +7,8 @@ LABEL version="2.0.0"
 #SETUP
 WORKDIR /app
 COPY requirements.txt .
-RUN apk add --no-cache gcc musl-dev && \
-    pip install --no-cache-dir -r requirements.txt && \
-    pip uninstall -y setuptools wheel pip && \
-    apk del gcc musl-dev
+RUN pip install --no-cache-dir -r requirements.txt && \
+    pip uninstall -y setuptools wheel pip
 
 
 #SECURITY
