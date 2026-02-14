@@ -3,7 +3,7 @@ from discord.ext import commands, tasks
 import aiohttp
 import os
 from datetime import datetime, timezone, timedelta
-from typing import List, Dict, Optional
+from typing import Optional
 import re
 
 # Configuration
@@ -106,7 +106,6 @@ def filter_matches_by_leagues(data, target_leagues=None):
 def format_match_embed(match):
     """Formate un match en embed Discord"""
     state = match.get('state', 'unstarted')
-    match_type = match.get('type', 'match')
     
     team1 = match.get('match', {}).get('teams', [{}])[0]
     team2 = match.get('match', {}).get('teams', [{}])[1] if len(match.get('match', {}).get('teams', [])) > 1 else {}
@@ -166,7 +165,7 @@ async def on_ready():
     print(f'✅ Bot connecté en tant que {bot.user}')
     print(f'📺 Match Channel: {MATCH_CHANNEL_ID}')
     print(f'📰 News Channel: {NEWS_CHANNEL_ID}')
-    print(f'🚀 CI/CD Pipeline Active!')
+    print('🚀 CI/CD Pipeline Active!')
 
     if not check_matches.is_running():
         check_matches.start()
@@ -195,7 +194,6 @@ async def show_matches(ctx):
     
     matches = filter_matches_by_leagues(data)
     
-    now = datetime.now(timezone.utc)
     completed = []
     upcoming = []
     
@@ -204,7 +202,6 @@ async def show_matches(ctx):
         if not start_time:
             continue
         
-        dt = datetime.fromisoformat(start_time.replace('Z', '+00:00'))
         state = match.get('state', 'unstarted')
         
         if state == 'completed':
@@ -382,7 +379,7 @@ async def check_sheep_news():
         if not channel:
             return
 
-        print(f"🔍 Checking Sheep Esports news via web...")
+        print("🔍 Checking Sheep Esports news via web...")
 
         # Utiliser la page principale qui liste les articles
         url = 'https://www.sheepesports.com/us/lol/articles'
