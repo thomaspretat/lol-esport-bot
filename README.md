@@ -1,36 +1,35 @@
 # LoL Esport Bot
 
-Bot Discord qui suit les matchs de League of Legends esport et les news Sheep Esports.
+Bot Discord that follow Lol esports and matches, including some news via SheepEsports website. Following :
+LEC, LCK, LPL, LTA, LCP.
 
-## Leagues suivies
-
-LEC, LCK, LPL, LTA, LCP
-
-## Commandes
+## Commands
 
 | Commande | Description |
 |----------|-------------|
-| `!matches` | Affiche les 4 derniers resultats et les 4 prochains matchs |
-| `!today` | Affiche les matchs du jour |
-| `!team <nom>` | Affiche les matchs d'une equipe (ex: `!team fnatic`) |
-| `!league <ligue>` | Affiche les matchs d'une ligue (ex: `!league lec`) |
+| `!matches` | Show last 4 results and next 4 matches |
+| `!today` | Show today's matches |
+| `!team <nom>` | Show a team matches (ex: `!team fnatic`) |
+| `!league <ligue>` | Show a league matches (ex: `!league lec`) |
 
-## Fonctionnement automatique
+## Automatic
 
-- Check des matchs toutes les 1h avec notification 1h avant le debut
-- Check des news Sheep Esports toutes les 2h
+- Check every hour if there is a match or will be a match and send a notification before it start.
+- Check Sheep Esports news every two hours.
 
-## Variables d'environnement
+## ENV VARIABLES
 
 | Variable | Description |
 |----------|-------------|
-| `DISCORD_TOKEN` | Token du bot Discord |
-| `MATCH_CHANNEL_ID` | ID du channel pour les notifications de matchs |
-| `NEWS_CHANNEL_ID` | ID du channel pour les news Sheep Esports |
+| `DISCORD_TOKEN` | Token of the Discord's bot |
+| `MATCH_CHANNEL_ID` | Channel ID to get the matches's notifications. |
+| `NEWS_CHANNEL_ID` | Channel ID to get the news notifications. |
 
-## Lancer le bot
+## How to start it
 
 ```
 pip install -r requirements.txt
 DISCORD_TOKEN=xxx MATCH_CHANNEL_ID=123 NEWS_CHANNEL_ID=456 python bot.py
+
+Or launch it via Docker or Kube by referencing a .env file or directly in the CLI.
 ```
