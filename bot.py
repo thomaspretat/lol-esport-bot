@@ -20,6 +20,9 @@ intents.message_content = True
 
 bot = commands.Bot(command_prefix='!', intents=intents)
 
+# Session aiohttp réutilisée
+http_session: Optional[aiohttp.ClientSession] = None
+
 # Cache pour éviter les doublons
 notified_matches = set()
 posted_articles = set()
@@ -69,13 +72,12 @@ async def fetch_schedule():
     }
     
     try:
-        async with aiohttp.ClientSession() as session:
-            async with session.get(url, params=params, headers=headers) as resp:
-                if resp.status == 200:
-                    return await resp.json()
-                else:
-                    print(f"API Error: {resp.status}")
-                    return None
+        async with http_session.get(url, params=params, headers=headers) as resp:
+            if resp.status == 200:
+                return await resp.json()
+            else:
+                print(f"API Error: {resp.status}")
+                return None
     except Exception as e:
         print(f"Error fetching schedule: {e}")
         return None
@@ -157,6 +159,10 @@ def format_match_embed(match):
 
 @bot.event
 async def on_ready():
+    global http_session
+    if http_session is None or http_session.closed:
+        http_session = aiohttp.ClientSession()
+
     print(f'✅ Bot connecté en tant que {bot.user}')
     print(f'📺 Match Channel: {MATCH_CHANNEL_ID}')
     print(f'📰 News Channel: {NEWS_CHANNEL_ID}')
@@ -167,6 +173,15 @@ async def on_ready():
 
     if not check_sheep_news.is_running():
         check_sheep_news.start()
+
+async def close_session():
+    global http_session
+    if http_session and not http_session.closed:
+        await http_session.close()
+
+@bot.event
+async def on_close():
+    await close_session()
 
 @bot.command(name='matches')
 async def show_matches(ctx):
@@ -370,81 +385,92 @@ async def check_sheep_news():
         print(f"🔍 Checking Sheep Esports news via web...")
 
         # Utiliser la page principale qui liste les articles
-        url = 'https://www.sheepesports.com/en/lol/articles'
+        url = 'https://www.sheepesports.com/us/lol/articles'
 
-        async with aiohttp.ClientSession() as session:
-            async with session.get(url, headers={
-                'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36'
-            }) as resp:
-                if resp.status != 200:
-                    print(f"❌ HTTP Error {resp.status}")
-                    return
+        async with http_session.get(url, headers={
+            'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36'
+        }) as resp:
+            if resp.status != 200:
+                print(f"❌ HTTP Error {resp.status}")
+                return
 
-                html = await resp.text()
+            html = await resp.text()
 
-                # Chercher les slugs d'articles dans le HTML
-                # Pattern: articles/[slug]
-                pattern = r'articles/([a-z][a-z0-9\-]{15,})'
-                slugs = re.findall(pattern, html)
+            # Extraire titre + slug depuis les données RSC de Next.js
+            # Pattern Sanity CMS: "title":"...","url":{"_type":"slug","current":"SLUG"}
+            title_pattern = r'"title":"([^"]+)","url":\{"_type":"slug","current":"([a-z][a-z0-9\-]{15,})"\}'
+            title_matches = re.findall(title_pattern, html)
 
-                # Dédupliquer tous les articles (filtrer les slugs techniques)
-                unique_slugs = []
-                seen = set()
-                for slug in slugs:
-                    # Filtrer les pages techniques et les slugs non-articles
-                    if slug not in seen and not slug.startswith('page-') and 'tracker' not in slug:
+            # Construire la liste (slug, title) depuis les paires titre/slug
+            articles = []
+            seen = set()
+            if title_matches:
+                for title, slug in title_matches:
+                    if slug not in seen:
                         seen.add(slug)
-                        unique_slugs.append(slug)
+                        articles.append((slug, title))
+            else:
+                # Fallback: extraire les slugs depuis les cartes HTML rendues
+                card_pattern = r'<a[^>]*href="/us/lol/articles/([a-z][a-z0-9\-]{15,})/en"[^>]*>.*?<h[23][^>]*>(.*?)</h[23]>'
+                card_matches = re.findall(card_pattern, html, re.DOTALL)
+                for slug, raw_title in card_matches:
+                    if slug not in seen:
+                        seen.add(slug)
+                        title = re.sub(r'<[^>]+>', '', raw_title).strip()
+                        articles.append((slug, title))
 
-                if not unique_slugs:
-                    print("⚠️ No article slugs found")
-                    return
+            if not articles:
+                print("⚠️ No article slugs found")
+                return
 
-                print(f"📰 Found {len(unique_slugs)} articles")
+            print(f"📰 Found {len(articles)} articles")
 
-                # Mode silencieux au premier lancement
-                new_articles = [slug for slug in unique_slugs if slug not in posted_articles]
+            # Filtrer les articles déjà postés
+            new_articles = [(slug, title) for slug, title in articles if slug not in posted_articles]
 
-                if len(posted_articles) == 0 and len(new_articles) > 0:
-                    print(f"🔇 Premier lancement - remplissage du cache avec {len(new_articles)} articles (sans poster)")
-                    posted_articles.update(new_articles)
-                    save_article_cache()
-                    return
-
-                # Poster uniquement les nouveaux articles
-                for slug in new_articles:
-                    # Construire l'URL de l'article
-                    article_url = f"https://www.sheepesports.com/en/lol/articles/{slug}"
-
-                    # Créer un titre à partir du slug
-                    title = slug.replace('-', ' ').title()
-
-                    embed = discord.Embed(
-                        title=title[:256],
-                        url=article_url,
-                        color=0xFF6B35,
-                        timestamp=datetime.now(timezone.utc)
-                    )
-
-                    embed.set_footer(
-                        text="Sheep Esports",
-                        icon_url="https://www.sheepesports.com/favicon.ico"
-                    )
-
-                    await channel.send(embed=embed)
-                    posted_articles.add(slug)
-
-                    print(f"✅ Posted article: {title[:50]}...")
-
-                # Sauvegarder le cache après avoir posté
+            # Mode silencieux au premier lancement
+            if len(posted_articles) == 0 and len(new_articles) > 0:
+                print(f"🔇 Premier lancement - remplissage du cache avec {len(new_articles)} articles (sans poster)")
+                posted_articles.update(slug for slug, _ in new_articles)
                 save_article_cache()
+                return
 
-                # Limiter le cache si trop grand
-                if len(posted_articles) > 200:
-                    # Garder seulement les 100 plus récents
-                    posted_articles.clear()
-                    posted_articles.update(list(posted_articles)[-100:])
-                    save_article_cache()
+            # Inverser pour poster du plus ancien au plus récent (ordre chronologique)
+            new_articles.reverse()
+
+            # Limiter à 5 articles max par cycle pour éviter le spam
+            new_articles = new_articles[-5:]
+
+            # Poster uniquement les nouveaux articles
+            for slug, title in new_articles:
+                article_url = f"https://www.sheepesports.com/us/lol/articles/{slug}/en"
+
+                embed = discord.Embed(
+                    title=title[:256],
+                    url=article_url,
+                    color=0xFF6B35,
+                    timestamp=datetime.now(timezone.utc)
+                )
+
+                embed.set_footer(
+                    text="Sheep Esports",
+                    icon_url="https://www.sheepesports.com/favicon.ico"
+                )
+
+                await channel.send(embed=embed)
+                posted_articles.add(slug)
+
+                print(f"✅ Posted article: {title[:50]}...")
+
+            # Sauvegarder le cache après avoir posté
+            save_article_cache()
+
+            # Limiter le cache si trop grand
+            if len(posted_articles) > 200:
+                recent = sorted(posted_articles)[-100:]
+                posted_articles.clear()
+                posted_articles.update(recent)
+                save_article_cache()
 
     except Exception as e:
         print(f"❌ Error checking Sheep news: {e}")
