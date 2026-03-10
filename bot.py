@@ -55,10 +55,11 @@ posted_articles = load_article_cache()
 # Mapping des leagues
 LEAGUES = {
     'lec': 'LEC',
-    'lck': 'LCK', 
+    'lck': 'LCK',
     'lpl': 'LPL',
-    'lta': 'LTA',
-    'lcp': 'LCP'
+    'worlds': 'WORLDS',
+    'msi': 'MSI',
+    'firststand': 'FIRST STAND',
 }
 
 async def fetch_schedule():
@@ -83,9 +84,9 @@ async def fetch_schedule():
         return None
 
 def filter_matches_by_leagues(data, target_leagues=None):
-    """Filtre les matchs par leagues (LEC, LCK, LPL, LTA, LCP)"""
+    """Filtre les matchs par leagues"""
     if target_leagues is None:
-        target_leagues = ['LEC', 'LCK', 'LPL', 'LTA', 'LCP']
+        target_leagues = ['LEC', 'LCK', 'LPL', 'WORLDS', 'MSI', 'FIRST STAND']
     
     filtered = []
     
@@ -304,29 +305,31 @@ async def today_matches(ctx):
 
 @bot.command(name='league')
 async def league_matches(ctx, league: str):
-    """Affiche les matchs d'une league spécifique (LEC, LCK, LPL, LTA, LCP)"""
-    league_upper = league.upper()
-    
-    if league_upper not in ['LEC', 'LCK', 'LPL', 'LTA', 'LCP']:
-        await ctx.send("❌ League invalide. Utilisez: LEC, LCK, LPL, LTA ou LCP")
+    """Affiche les matchs d'une league spécifique"""
+    league_key = league.lower()
+
+    if league_key not in LEAGUES:
+        leagues_list = ', '.join(LEAGUES.keys())
+        await ctx.send(f"❌ League invalide. Utilisez: {leagues_list}")
         return
-    
-    await ctx.send(f"🔍 Matchs de la {league_upper}...")
-    
+
+    league_name = LEAGUES[league_key]
+    await ctx.send(f"🔍 Matchs de la {league_name}...")
+
     data = await fetch_schedule()
     if not data:
         await ctx.send("❌ Impossible de récupérer les données")
         return
-    
-    matches = filter_matches_by_leagues(data, [league_upper])
+
+    matches = filter_matches_by_leagues(data, [league_name])
     
     if not matches:
-        await ctx.send(f"Aucun match trouvé pour la {league_upper}")
+        await ctx.send(f"Aucun match trouvé pour la {league_name}")
         return
-    
+
     matches = sorted(matches, key=lambda x: x.get('startTime', ''))
-    
-    await ctx.send(f"**{league_upper} Matchs ({len(matches)}):**")
+
+    await ctx.send(f"**{league_name} Matchs ({len(matches)}):**")
     for match in matches[:10]:
         embed = format_match_embed(match)
         await ctx.send(embed=embed)
