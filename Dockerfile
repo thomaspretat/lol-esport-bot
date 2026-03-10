@@ -6,6 +6,7 @@ LABEL version="2.0.0"
 
 #SETUP
 WORKDIR /app
+RUN apk upgrade --no-cache
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt && \
     pip uninstall -y setuptools wheel pip
